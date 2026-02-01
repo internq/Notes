@@ -11,7 +11,8 @@
     .sidebar { font-size: 15px; }
     .content { font-size: 17px; line-height: 1.6; }
     mark { background-color: #ffecb3; padding: 2px; } /* Highlights search terms */
-  </style> </head>
+  </style> 
+</head>
 <body>
   <div id="app"></div>
   <script>
@@ -23,21 +24,19 @@
       subMaxLevel: 3,
       auto2top: true,
       
-      // ADVANCED SEARCH CONFIGURATION
+      // AGGRESSIVE SEARCH CONFIGURATION
       search: {
         maxAge: 86400000, 
-        paths: 'auto',
-        placeholder: 'Search Strongs (H7251), Hebrew, Greek or English...',
-        noData: 'No results found for that term.',
+        paths: 'auto', // Indexes all files found in the sidebar
+        placeholder: 'Search for H7200, Luke, etc...',
+        noData: 'No results found!',
         depth: 6,
-        hideOtherSidebarContent: false, 
-        namespace: 'bible-study-archive'
+        hideOtherSidebarContent: false
       }
     }
   </script>
 
   <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
-  
   <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
   <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/zoom-image.min.js"></script>
 </body>

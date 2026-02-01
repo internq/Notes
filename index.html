@@ -1,95 +1,238 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Bible Study Archive</title>
-  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>Bible Search</title>
 
-  <link rel="stylesheet" href="//cdn.jsdelivr.net/npm/docsify@4/lib/themes/vue.css">
+  <!-- Lunr -->
+  <script src="https://unpkg.com/lunr/lunr.js"></script>
 
   <style>
-    .sidebar { font-size: 15px; }
-    .content { font-size: 18px; line-height: 1.6; }
-
-    mark {
-      background: #ffeb3b;
-      color: black;
-      font-weight: bold;
-      padding: 2px;
-      border-radius: 2px;
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
     }
 
-    .search .results-panel {
-      max-height: 70vh;
+    input[type="text"] {
+      width: 100%;
+      font-size: 1.1rem;
+      padding: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .result {
+      border-bottom: 1px solid #ddd;
+      padding: 0.75rem 0;
+    }
+
+    .ref {
+      font-weight: bold;
+      margin-bottom: 0.25rem;
+    }
+
+    .text {
+      font-size: 1.05rem;
+      line-height: 1.4;
+    }
+
+    .rtl {
+      direction: rtl;
+      text-align: right;
+    }
+
+    .strongs {
+      display: inline-block;
+      margin-top: 0.25rem;
+      margin-right: 0.5rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      color: #0055aa;
+    }
+
+    .strongs:hover {
+      text-decoration: underline;
+    }
+
+    #concordance {
+      position: fixed;
+      top: 0;
+      right: 0;
+      width: 35%;
+      height: 100%;
+      background: #fafafa;
+      border-left: 1px solid #ccc;
+      padding: 1rem;
       overflow-y: auto;
+      display: none;
+    }
+
+    #concordance h2 {
+      margin-top: 0;
+    }
+
+    #closeConcordance {
+      cursor: pointer;
+      color: #900;
+      font-size: 0.9rem;
     }
   </style>
 </head>
 
 <body>
-  <div id="app">Loading Archive…</div>
 
-  <script>
-    window.$docsify = {
-      name: 'Theological Archive',
-      homepage: 'genesis.md',
-      loadSidebar: true,
-      subMaxLevel: 4,
-      auto2top: true,
+<h1>Bible Search</h1>
 
-      search: {
-        paths: 'auto',
-        placeholder: 'Search Hebrew / Greek / English / Strong’s (e.g. H7200)',
-        noData: 'No matches found',
-        depth: 10,
-        maxResults: 5000,        // ← FIX result truncation
-        hideOtherSidebarContent: false
-      },
+<input
+  id="searchBox"
+  type="text"
+  placeholder="Search Hebrew, Greek, English, Gen 1:1, H7200…"
+/>
 
-      plugins: [
-        function (hook, vm) {
+<div id="results"></div>
 
-          // Inject anchors for search terms BEFORE render
-          hook.beforeEach(function (content) {
-            const params = new URLSearchParams(location.hash.split('?')[1]);
-            const term = params.get('s');
-            if (!term) return content;
+<!-- Concordance Panel -->
+<div id="concordance">
+  <div id="closeConcordance">[close]</div>
+  <h2 id="concordanceTitle"></h2>
+  <div id="concordanceResults"></div>
+</div>
 
-            // Escape regex safely (Hebrew / Greek safe)
-            const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(escaped, 'gi');
+<script>
+/* ===============================
+   Load Index
+================================ */
 
-            let firstHit = true;
+let index;
+let records = [];
 
-            return content.replace(regex, match => {
-              if (firstHit) {
-                firstHit = false;
-                return `<a id="__search_hit__"></a><mark>${match}</mark>`;
-              }
-              return `<mark>${match}</mark>`;
-            });
-          });
+fetch("search-index.json")
+  .then(res => res.json())
+  .then(data => {
+    records = data;
 
-          // Scroll AFTER render
-          hook.doneEach(function () {
-            const anchor = document.getElementById('__search_hit__');
-            if (anchor) {
-              setTimeout(() => {
-                anchor.scrollIntoView({
-                  behavior: 'smooth',
-                  block: 'center'
-                });
-              }, 300);
-            }
-          });
-        }
-      ]
-    };
-  </script>
+    index = lunr(function () {
+      this.ref("id");
+      this.field("text_norm", { boost: 10 });
+      this.field("strongs", { boost: 20 });
+      this.field("ref", { boost: 5 });
+      this.field("section", { boost: 2 });
 
-  <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
-  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/zoom-image.min.js"></script>
+      data.forEach(doc => this.add(doc));
+    });
+  });
+
+/* ===============================
+   Search Input
+================================ */
+
+document.getElementById("searchBox").addEventListener("input", e => {
+  const q = e.target.value.trim();
+  if (!q || !index) {
+    document.getElementById("results").innerHTML = "";
+    return;
+  }
+
+  const hits = index.search(q);
+  renderResults(hits);
+});
+
+/* ===============================
+   Render Results
+================================ */
+
+function renderResults(hits) {
+  const container = document.getElementById("results");
+  container.innerHTML = "";
+
+  if (!hits.length) {
+    container.innerHTML = "<p>No results.</p>";
+    return;
+  }
+
+  hits.forEach(hit => {
+    const r = records.find(x => x.id === hit.ref);
+    if (!r) return;
+
+    const div = document.createElement("div");
+    div.className = "result";
+
+    const rtl = r.languageTags.includes("he");
+
+    div.innerHTML = `
+      <div class="ref">${r.ref || r.section}</div>
+      <div class="text ${rtl ? "rtl" : ""}">
+        ${highlight(r.text)}
+      </div>
+      <div>
+        ${renderStrongs(r.strongs)}
+      </div>
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+/* ===============================
+   Helpers
+================================ */
+
+function highlight(text) {
+  const q = document.getElementById("searchBox").value;
+  if (!q) return text;
+  return text.replace(
+    new RegExp(q, "gi"),
+    m => `<mark>${m}</mark>`
+  );
+}
+
+function renderStrongs(strongs = []) {
+  return strongs
+    .filter(s => /^[HG]\d{4}$/.test(s))
+    .map(s =>
+      `<span class="strongs" onclick="openConcordance('${s}')">${s}</span>`
+    )
+    .join(" ");
+}
+
+/* ===============================
+   Concordance (Step 4 hook)
+================================ */
+
+function openConcordance(code) {
+  document.getElementById("concordance").style.display = "block";
+  document.getElementById("concordanceTitle").textContent =
+    `Strong’s Concordance: ${code}`;
+
+  const results = index.search(code);
+  const container = document.getElementById("concordanceResults");
+  container.innerHTML = "";
+
+  results.forEach(hit => {
+    const r = records.find(x => x.id === hit.ref);
+    if (!r) return;
+
+    const rtl = r.languageTags.includes("he");
+
+    const div = document.createElement("div");
+    div.className = "result";
+
+    div.innerHTML = `
+      <div class="ref">${r.ref}</div>
+      <div class="text ${rtl ? "rtl" : ""}">
+        ${r.text}
+      </div>
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+document.getElementById("closeConcordance").onclick = () => {
+  document.getElementById("concordance").style.display = "none";
+};
+</script>
+
 </body>
 </html>

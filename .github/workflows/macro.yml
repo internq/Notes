@@ -1,0 +1,35 @@
+name: Run Bible Macro
+
+on:
+  push:
+    paths:
+      - input.md
+      - search-index.json
+      - scripts/run-macro.js
+
+jobs:
+  macro:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps
+        run: npm install fs-extra
+
+      - name: Run macro
+        run: node scripts/run-macro.js
+
+      - name: Commit output
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add output.md
+          git commit -m "Auto-generate output.md" || echo "No changes"
+          git push

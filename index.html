@@ -9,10 +9,9 @@
   <style>
     .sidebar { font-size: 15px; }
     .content { font-size: 18px; line-height: 1.6; }
-    /* This makes the yellow highlight visible */
-    mark { background: #ffeb3b !important; color: black; font-weight: bold; }
-    .search .results-panel { max-height: 600px; overflow-y: auto !important; display: block; }
-    .search .matching-post { border-bottom: 1px solid #eee; }
+    /* Force highlight color */
+    mark { background: #ffeb3b !important; color: black; font-weight: bold; padding: 2px; border-radius: 2px; }
+    .search .results-panel { max-height: 600px; overflow-y: auto !important; }
   </style>
 </head>
 <body>
@@ -25,34 +24,48 @@
       subMaxLevel: 4,
       auto2top: true,
       
-      // MAXIMUM POWER SEARCH
       search: {
         maxAge: 86400000, 
         paths: 'auto',
         placeholder: 'Type to search (e.g. H7200)',
         noData: 'No matches found',
         depth: 6,
-        maxResults: 1000, // Increased to 1000 for your large docs
+        maxResults: 1000,
+        // This ensures the search engine indexes the full content
         hideOtherSidebarContent: false
-      }
+      },
+
+      // THIS REFRESHES THE SEARCH JUMP
+      plugins: [
+        function(hook, vm) {
+          hook.doneEach(function() {
+            // If there's a search term in the URL, try to find and scroll to it
+            const urlParams = new URLSearchParams(window.location.hash.split('?')[1]);
+            const query = urlParams.get('s');
+            if (query) {
+              setTimeout(() => {
+                const found = window.find(query);
+                if (!found) {
+                  // Fallback for browsers that don't support window.find
+                  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+                  let node;
+                  while(node = walker.nextNode()) {
+                    if (node.textContent.includes(query)) {
+                      node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      break;
+                    }
+                  }
+                }
+              }, 600);
+            }
+          });
+        }
+      ]
     }
   </script>
 
   <script src="//cdn.jsdelivr.net/npm/docsify@4"></script>
-  
   <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/search.min.js"></script>
-  
-  <script>
-    // Small logic to help the browser "find" the word after clicking a search result
-    window.addEventListener('hashchange', function() {
-      setTimeout(function() {
-        const searchParams = new URLSearchParams(window.location.search);
-        const query = searchParams.get('s');
-        if (query) {
-          window.find(query); // Native browser "Find" jump
-        }
-      }, 500);
-    });
-  </script>
+  <script src="//cdn.jsdelivr.net/npm/docsify/lib/plugins/zoom-image.min.js"></script>
 </body>
 </html>
